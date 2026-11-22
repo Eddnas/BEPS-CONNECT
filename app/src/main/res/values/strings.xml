@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">BEPS Connect</string>
+    <string name="school_full_name">Bangladesh English Private School</string>
+    <string name="school_location">Ras Al Khaimah, UAE</string>
+    <string name="school_tagline">Safe Arrival. Verified Collection. Peace of Mind.</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+    <string name="signing_in">Signing in…</string>
+    <string name="sign_out">Sign out</string>
+    <string name="dispersal_open">Dispersal Open</string>
+    <string name="dispersal_closed">Dispersal Locked</string>
+    <string name="request_my_child">REQUEST MY CHILD</string>
+    <string name="camera_permission_title">Camera Access for QR Gate Scanning</string>
+    <string name="camera_permission_rationale">BEPS Security uses the camera to scan student QR badges at arrival and collection gates.</string>
+    <string name="grant_camera_permission">Enable QR Camera</string>
+    <string name="export_daily_pdf">Export Daily PDF Report</string>
+    <string name="beps_crest_desc">Bangladesh English Private School crest logo</string>
+</resources>

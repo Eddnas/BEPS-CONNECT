@@ -1,0 +1,6 @@
+{
+  "name": "BEPS Connect",
+  "description": "Smart Student Arrival & Dispersal Management System for Bangladesh English Private School, Ras Al Khaimah, UAE.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

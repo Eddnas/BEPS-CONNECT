@@ -1,0 +1,192 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user account and assigned RBAC role for BEPS Connect.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the user." },
+        "displayName": { "type": "string", "description": "Full display name." },
+        "email": { "type": "string", "description": "Verified email address." },
+        "phone": { "type": "string", "description": "Optional UAE contact phone number." },
+        "role": { "type": "string", "enum": ["PARENT", "TEACHER", "SECURITY", "ADMIN"] },
+        "assignedGrade": { "type": "string", "description": "Optional grade/section for teachers or gate post for security." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "displayName", "email", "role", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Explicit admin authorization marker document.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "grantedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "grantedBy", "createdAt"]
+    },
+    "SchoolConfig": {
+      "title": "SchoolConfig",
+      "description": "Global campus dispersal gate configuration for Bangladesh English Private School, RAK.",
+      "type": "object",
+      "properties": {
+        "schoolName": { "type": "string" },
+        "campusLocation": { "type": "string" },
+        "dispersalOpen": { "type": "boolean" },
+        "dispersalWindowLabel": { "type": "string" },
+        "activeNotice": { "type": "string" },
+        "updatedByUid": { "type": "string" },
+        "updatedByName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["schoolName", "campusLocation", "dispersalOpen", "dispersalWindowLabel", "activeNotice", "updatedByUid", "updatedByName", "createdAt", "updatedAt"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student arrival, classroom, pickup, and handover state record.",
+      "type": "object",
+      "properties": {
+        "studentCode": { "type": "string" },
+        "fullName": { "type": "string" },
+        "grade": { "type": "string" },
+        "parentUid": { "type": "string" },
+        "parentName": { "type": "string" },
+        "parentEmail": { "type": "string" },
+        "authorizedStaffUids": { "type": "array" },
+        "authorizedGuardians": { "type": "array" },
+        "photoKey": { "type": "string" },
+        "busRouteId": { "type": "string" },
+        "busRouteName": { "type": "string" },
+        "transportMode": { "type": "string", "enum": ["PRIVATE_PICKUP", "SCHOOL_BUS"] },
+        "status": { "type": "string", "enum": ["NOT_ARRIVED", "ARRIVED_AT_GATE", "IN_CLASSROOM", "PICKUP_REQUESTED", "READY_FOR_PICKUP", "COLLECTED", "BOARDED_BUS"] },
+        "arrivalTimeLabel": { "type": "string" },
+        "collectionTimeLabel": { "type": "string" },
+        "lastUpdatedByUid": { "type": "string" },
+        "lastUpdatedByName": { "type": "string" },
+        "verifiedCollectorName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentCode", "fullName", "grade", "parentUid", "parentName", "parentEmail", "authorizedStaffUids", "authorizedGuardians", "photoKey", "busRouteId", "busRouteName", "transportMode", "status", "arrivalTimeLabel", "collectionTimeLabel", "lastUpdatedByUid", "lastUpdatedByName", "verifiedCollectorName", "createdAt", "updatedAt"]
+    },
+    "AttendanceLog": {
+      "title": "AttendanceLog",
+      "description": "Immutable arrival, classroom, pickup, handover, and rejection audit log.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "studentCode": { "type": "string" },
+        "studentName": { "type": "string" },
+        "grade": { "type": "string" },
+        "parentUid": { "type": "string" },
+        "authorizedStaffUids": { "type": "array" },
+        "eventType": { "type": "string", "enum": ["ARRIVAL", "CLASSROOM_CHECKIN", "PICKUP_REQUESTED", "READY_FOR_PICKUP", "HANDOVER_COMPLETED", "BUS_BOARDED", "PICKUP_REJECTED"] },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "actorUid": { "type": "string" },
+        "actorName": { "type": "string" },
+        "actorRole": { "type": "string", "enum": ["PARENT", "TEACHER", "SECURITY", "ADMIN"] },
+        "collectorName": { "type": "string" },
+        "timeLabel": { "type": "string" },
+        "dateKey": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "studentCode", "studentName", "grade", "parentUid", "authorizedStaffUids", "eventType", "title", "message", "actorUid", "actorName", "actorRole", "collectorName", "timeLabel", "dateKey", "createdAt"]
+    },
+    "BusRoute": {
+      "title": "BusRoute",
+      "description": "BEPS school bus route monitoring record.",
+      "type": "object",
+      "properties": {
+        "routeNumber": { "type": "string" },
+        "routeName": { "type": "string" },
+        "driverName": { "type": "string" },
+        "attendantName": { "type": "string" },
+        "status": { "type": "string", "enum": ["AT_SCHOOL", "BOARDING", "DEPARTED", "COMPLETED"] },
+        "boardedCount": { "type": "integer" },
+        "capacity": { "type": "integer" },
+        "lastCheckpoint": { "type": "string" },
+        "assignedParentUids": { "type": "array" },
+        "authorizedStaffUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["routeNumber", "routeName", "driverName", "attendantName", "status", "boardedCount", "capacity", "lastCheckpoint", "assignedParentUids", "authorizedStaffUids", "createdAt", "updatedAt"]
+    },
+    "ManagementAlert": {
+      "title": "ManagementAlert",
+      "description": "Management alert for delays, uncollected students, rejected requests, or incidents.",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "alertType": { "type": "string", "enum": ["DELAY", "REJECTED_PICKUP", "UNCOLLECTED_STUDENT", "INCIDENT"] },
+        "severity": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "reportedByUid": { "type": "string" },
+        "reportedByName": { "type": "string" },
+        "reportedByRole": { "type": "string" },
+        "status": { "type": "string", "enum": ["OPEN", "ACKNOWLEDGED", "RESOLVED"] },
+        "authorizedStaffUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["studentId", "studentName", "alertType", "severity", "title", "description", "reportedByUid", "reportedByName", "reportedByRole", "status", "authorizedStaffUids", "createdAt", "updatedAt"]
+    },
+    "RoleRequest": {
+      "title": "RoleRequest",
+      "description": "Staff role upgrade request submitted by an authenticated user for Admin review.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "requestedRole": { "type": "string", "enum": ["TEACHER", "SECURITY"] },
+        "note": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "DECLINED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "email", "requestedRole", "note", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Authenticated user profiles with PII isolation."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin role directory."
+    },
+    "/school_config/{configId}": {
+      "schema": { "$ref": "#/entities/SchoolConfig" },
+      "description": "Campus dispersal window and active announcement configuration."
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Student roster with live arrival, classroom, pickup, and handover state."
+    },
+    "/attendance_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AttendanceLog" },
+      "description": "Immutable arrival and dispersal audit log entries."
+    },
+    "/bus_routes/{routeId}": {
+      "schema": { "$ref": "#/entities/BusRoute" },
+      "description": "School bus transport monitoring records."
+    },
+    "/management_alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/ManagementAlert" },
+      "description": "Incident, delay, uncollected student, and rejected pickup alerts."
+    },
+    "/role_requests/{userId}": {
+      "schema": { "$ref": "#/entities/RoleRequest" },
+      "description": "Pending staff role upgrade requests."
+    }
+  }
+}

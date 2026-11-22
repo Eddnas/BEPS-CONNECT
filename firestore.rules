@@ -1,0 +1,453 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() &&
+             ('email_verified' in request.auth.token) &&
+             request.auth.token.email_verified == true &&
+             ('email' in request.auth.token) &&
+             request.auth.token.email == 'edwardnana056@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() ||
+             (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function hasRole(roleName) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == roleName;
+    }
+
+    function isTeacherOnly() {
+      return hasRole('TEACHER');
+    }
+
+    function isSecurityOnly() {
+      return hasRole('SECURITY');
+    }
+
+    function isTeacher() {
+      return isAdmin() || isTeacherOnly();
+    }
+
+    function isSecurity() {
+      return isAdmin() || isSecurityOnly();
+    }
+
+    function isStaff() {
+      return isAdmin() ||
+             (isSignedIn() &&
+              exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['TEACHER', 'SECURITY', 'ADMIN']);
+    }
+
+    function isCampusDispersalOpen() {
+      return exists(/databases/$(database)/documents/school_config/main) &&
+             get(/databases/$(database)/documents/school_config/main).data.dispersalOpen == true;
+    }
+
+    function isValidStringArray(arr, maxCount, maxLen) {
+      return arr is list &&
+             arr.size() <= maxCount &&
+             (arr.size() == 0 || (arr[0] is string && arr[0].size() <= maxLen));
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+             data.role in ['PARENT', 'TEACHER', 'SECURITY', 'ADMIN'] &&
+             (!('assignedGrade' in data) || (data.assignedGrade is string && data.assignedGrade.size() <= 60)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAdminRecord(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+             data.grantedBy is string && data.grantedBy.size() >= 1 && data.grantedBy.size() <= 128 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidSchoolConfig(data) {
+      return data.schoolName is string && data.schoolName.size() >= 3 && data.schoolName.size() <= 120 &&
+             data.campusLocation is string && data.campusLocation.size() >= 3 && data.campusLocation.size() <= 120 &&
+             data.dispersalOpen is bool &&
+             data.dispersalWindowLabel is string && data.dispersalWindowLabel.size() >= 3 && data.dispersalWindowLabel.size() <= 80 &&
+             data.activeNotice is string && data.activeNotice.size() <= 300 &&
+             data.updatedByUid is string && data.updatedByUid.size() >= 1 && data.updatedByUid.size() <= 128 &&
+             data.updatedByName is string && data.updatedByName.size() >= 1 && data.updatedByName.size() <= 100 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidStudent(data) {
+      return data.studentCode is string && data.studentCode.size() >= 3 && data.studentCode.size() <= 40 &&
+             data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 100 &&
+             data.grade is string && data.grade.size() >= 2 && data.grade.size() <= 40 &&
+             data.parentUid is string && data.parentUid.size() >= 1 && data.parentUid.size() <= 128 &&
+             data.parentName is string && data.parentName.size() >= 1 && data.parentName.size() <= 100 &&
+             data.parentEmail is string && data.parentEmail.size() >= 3 && data.parentEmail.size() <= 160 &&
+             isValidStringArray(data.authorizedStaffUids, 30, 128) &&
+             isValidStringArray(data.authorizedGuardians, 10, 140) &&
+             data.photoKey is string && data.photoKey.size() <= 200 &&
+             data.busRouteId is string && data.busRouteId.size() <= 128 &&
+             data.busRouteName is string && data.busRouteName.size() <= 100 &&
+             data.transportMode in ['PRIVATE_PICKUP', 'SCHOOL_BUS'] &&
+             data.status in ['NOT_ARRIVED', 'ARRIVED_AT_GATE', 'IN_CLASSROOM', 'PICKUP_REQUESTED', 'READY_FOR_PICKUP', 'COLLECTED', 'BOARDED_BUS'] &&
+             data.arrivalTimeLabel is string && data.arrivalTimeLabel.size() <= 40 &&
+             data.collectionTimeLabel is string && data.collectionTimeLabel.size() <= 40 &&
+             data.lastUpdatedByUid is string && data.lastUpdatedByUid.size() >= 1 && data.lastUpdatedByUid.size() <= 128 &&
+             data.lastUpdatedByName is string && data.lastUpdatedByName.size() >= 1 && data.lastUpdatedByName.size() <= 100 &&
+             data.verifiedCollectorName is string && data.verifiedCollectorName.size() <= 140 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAttendanceLog(data) {
+      return data.studentId is string && data.studentId.size() >= 1 && data.studentId.size() <= 128 &&
+             data.studentCode is string && data.studentCode.size() >= 3 && data.studentCode.size() <= 40 &&
+             data.studentName is string && data.studentName.size() >= 2 && data.studentName.size() <= 100 &&
+             data.grade is string && data.grade.size() >= 2 && data.grade.size() <= 40 &&
+             data.parentUid is string && data.parentUid.size() >= 1 && data.parentUid.size() <= 128 &&
+             isValidStringArray(data.authorizedStaffUids, 30, 128) &&
+             data.eventType in ['ARRIVAL', 'CLASSROOM_CHECKIN', 'PICKUP_REQUESTED', 'READY_FOR_PICKUP', 'HANDOVER_COMPLETED', 'BUS_BOARDED', 'PICKUP_REJECTED'] &&
+             data.title is string && data.title.size() >= 2 && data.title.size() <= 120 &&
+             data.message is string && data.message.size() >= 2 && data.message.size() <= 400 &&
+             data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 &&
+             data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100 &&
+             data.actorRole in ['PARENT', 'TEACHER', 'SECURITY', 'ADMIN'] &&
+             data.collectorName is string && data.collectorName.size() <= 140 &&
+             data.timeLabel is string && data.timeLabel.size() >= 1 && data.timeLabel.size() <= 40 &&
+             data.dateKey is string && data.dateKey.size() == 10 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidBusRoute(data) {
+      return data.routeNumber is string && data.routeNumber.size() >= 2 && data.routeNumber.size() <= 30 &&
+             data.routeName is string && data.routeName.size() >= 2 && data.routeName.size() <= 100 &&
+             data.driverName is string && data.driverName.size() >= 2 && data.driverName.size() <= 100 &&
+             data.attendantName is string && data.attendantName.size() >= 2 && data.attendantName.size() <= 100 &&
+             data.status in ['AT_SCHOOL', 'BOARDING', 'DEPARTED', 'COMPLETED'] &&
+             data.boardedCount is int && data.boardedCount >= 0 && data.boardedCount <= 100 &&
+             data.capacity is int && data.capacity >= 1 && data.capacity <= 100 &&
+             data.lastCheckpoint is string && data.lastCheckpoint.size() <= 120 &&
+             isValidStringArray(data.assignedParentUids, 60, 128) &&
+             isValidStringArray(data.authorizedStaffUids, 30, 128) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidManagementAlert(data) {
+      return data.studentId is string && data.studentId.size() <= 128 &&
+             data.studentName is string && data.studentName.size() <= 100 &&
+             data.alertType in ['DELAY', 'REJECTED_PICKUP', 'UNCOLLECTED_STUDENT', 'INCIDENT'] &&
+             data.severity in ['HIGH', 'MEDIUM', 'LOW'] &&
+             data.title is string && data.title.size() >= 3 && data.title.size() <= 120 &&
+             data.description is string && data.description.size() >= 3 && data.description.size() <= 500 &&
+             data.reportedByUid is string && data.reportedByUid.size() >= 1 && data.reportedByUid.size() <= 128 &&
+             data.reportedByName is string && data.reportedByName.size() >= 1 && data.reportedByName.size() <= 100 &&
+             data.reportedByRole is string && data.reportedByRole.size() >= 1 && data.reportedByRole.size() <= 30 &&
+             data.status in ['OPEN', 'ACKNOWLEDGED', 'RESOLVED'] &&
+             isValidStringArray(data.authorizedStaffUids, 30, 128) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidRoleRequest(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+             data.requestedRole in ['TEACHER', 'SECURITY'] &&
+             data.note is string && data.note.size() <= 250 &&
+             data.status in ['PENDING', 'APPROVED', 'DECLINED'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUser(incoming()) &&
+                       incoming().userId == userId &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'email', 'role', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'phone', 'role', 'assignedGrade', 'createdAt', 'updatedAt']) &&
+                       (
+                         (isOwner(userId) && incoming().role == 'PARENT') ||
+                         isAdmin()
+                       );
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidUser(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().email == existing().email &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'role', 'assignedGrade', 'updatedAt'])) ||
+                         (isOwner(userId) && incoming().role == existing().role && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'updatedAt']))
+                       );
+
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    match /admins/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isBootstrappedAdmin() &&
+                       isValidId(userId) &&
+                       isValidAdminRecord(incoming()) &&
+                       incoming().userId == userId &&
+                       incoming().keys().hasAll(['userId', 'email', 'grantedBy', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'email', 'grantedBy', 'createdAt']);
+      allow update: if false;
+      allow delete: if isBootstrappedAdmin() && isValidId(userId);
+    }
+
+    match /school_config/{configId} {
+      allow get: if isSignedIn() && isValidId(configId);
+      allow list: if isBootstrappedAdmin();
+      allow create: if isAdmin() &&
+                       isValidId(configId) &&
+                       isValidSchoolConfig(incoming()) &&
+                       incoming().keys().hasAll(['schoolName', 'campusLocation', 'dispersalOpen', 'dispersalWindowLabel', 'activeNotice', 'updatedByUid', 'updatedByName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['schoolName', 'campusLocation', 'dispersalOpen', 'dispersalWindowLabel', 'activeNotice', 'updatedByUid', 'updatedByName', 'createdAt', 'updatedAt']);
+      allow update: if isAdmin() &&
+                       isValidId(configId) &&
+                       isValidSchoolConfig(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['schoolName', 'campusLocation', 'dispersalOpen', 'dispersalWindowLabel', 'activeNotice', 'updatedByUid', 'updatedByName', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /students/{studentId} {
+      allow get: if isSignedIn() &&
+                    isValidId(studentId) &&
+                    (resource.data.parentUid == request.auth.uid ||
+                     request.auth.uid in resource.data.authorizedStaffUids ||
+                     isAdmin());
+
+      allow list: if isSignedIn() &&
+                     (resource.data.parentUid == request.auth.uid ||
+                      request.auth.uid in resource.data.authorizedStaffUids ||
+                      isBootstrappedAdmin());
+
+      allow create: if isAdmin() &&
+                       isValidId(studentId) &&
+                       isValidStudent(incoming()) &&
+                       incoming().keys().hasAll(['studentCode', 'fullName', 'grade', 'parentUid', 'parentName', 'parentEmail', 'authorizedStaffUids', 'authorizedGuardians', 'photoKey', 'busRouteId', 'busRouteName', 'transportMode', 'status', 'arrivalTimeLabel', 'collectionTimeLabel', 'lastUpdatedByUid', 'lastUpdatedByName', 'verifiedCollectorName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['studentCode', 'fullName', 'grade', 'parentUid', 'parentName', 'parentEmail', 'authorizedStaffUids', 'authorizedGuardians', 'photoKey', 'busRouteId', 'busRouteName', 'transportMode', 'status', 'arrivalTimeLabel', 'collectionTimeLabel', 'lastUpdatedByUid', 'lastUpdatedByName', 'verifiedCollectorName', 'createdAt', 'updatedAt']);
+
+      allow update: if isSignedIn() &&
+                       isValidId(studentId) &&
+                       isValidStudent(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().studentCode == existing().studentCode &&
+                       incoming().lastUpdatedByUid == request.auth.uid &&
+                       (
+                         // Action 1: Admin full edit or state correction
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'grade', 'parentUid', 'parentName', 'parentEmail', 'authorizedStaffUids', 'authorizedGuardians', 'photoKey', 'busRouteId', 'busRouteName', 'transportMode', 'status', 'arrivalTimeLabel', 'collectionTimeLabel', 'lastUpdatedByUid', 'lastUpdatedByName', 'verifiedCollectorName', 'updatedAt'])) ||
+
+                         // Action 2: Parent requests pickup (Safety Rule #1: dispersalOpen MUST be true and student must be IN_CLASSROOM)
+                         (existing().parentUid == request.auth.uid &&
+                          existing().status == 'IN_CLASSROOM' &&
+                          incoming().status == 'PICKUP_REQUESTED' &&
+                          isCampusDispersalOpen() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastUpdatedByUid', 'lastUpdatedByName', 'updatedAt'])) ||
+
+                         // Action 3: Parent updates authorized guardians list
+                         (existing().parentUid == request.auth.uid &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['authorizedGuardians', 'lastUpdatedByUid', 'lastUpdatedByName', 'updatedAt'])) ||
+
+                         // Action 4: Teacher confirms classroom check-in or marks student ready for pickup (Safety Rule #3)
+                         (isTeacherOnly() &&
+                          request.auth.uid in existing().authorizedStaffUids &&
+                          (
+                            (existing().status in ['NOT_ARRIVED', 'ARRIVED_AT_GATE'] && incoming().status == 'IN_CLASSROOM') ||
+                            (existing().status == 'PICKUP_REQUESTED' && incoming().status == 'READY_FOR_PICKUP')
+                          ) &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastUpdatedByUid', 'lastUpdatedByName', 'updatedAt'])) ||
+
+                         // Action 5: Security records arrival, verifies handover (Safety Rule #4 & #5), rejects pickup, or marks bus boarding
+                         (isSecurityOnly() &&
+                          request.auth.uid in existing().authorizedStaffUids &&
+                          (
+                            (existing().status == 'NOT_ARRIVED' &&
+                             incoming().status == 'ARRIVED_AT_GATE' &&
+                             incoming().arrivalTimeLabel.size() >= 1 &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'arrivalTimeLabel', 'lastUpdatedByUid', 'lastUpdatedByName', 'updatedAt'])) ||
+                            (existing().status == 'READY_FOR_PICKUP' &&
+                             incoming().status == 'COLLECTED' &&
+                             incoming().verifiedCollectorName.size() >= 2 &&
+                             incoming().collectionTimeLabel.size() >= 1 &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'collectionTimeLabel', 'verifiedCollectorName', 'lastUpdatedByUid', 'lastUpdatedByName', 'updatedAt'])) ||
+                            (existing().status == 'PICKUP_REQUESTED' &&
+                             incoming().status == 'IN_CLASSROOM' &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'lastUpdatedByUid', 'lastUpdatedByName', 'updatedAt'])) ||
+                            (existing().status in ['IN_CLASSROOM', 'READY_FOR_PICKUP'] &&
+                             incoming().status == 'BOARDED_BUS' &&
+                             incoming().collectionTimeLabel.size() >= 1 &&
+                             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'collectionTimeLabel', 'lastUpdatedByUid', 'lastUpdatedByName', 'updatedAt']))
+                          ))
+                       );
+
+      allow delete: if isAdmin() && isValidId(studentId);
+    }
+
+    match /attendance_logs/{logId} {
+      allow get: if isSignedIn() &&
+                    isValidId(logId) &&
+                    (resource.data.parentUid == request.auth.uid ||
+                     request.auth.uid in resource.data.authorizedStaffUids ||
+                     isAdmin());
+
+      allow list: if isSignedIn() &&
+                     (resource.data.parentUid == request.auth.uid ||
+                      request.auth.uid in resource.data.authorizedStaffUids ||
+                      isBootstrappedAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(logId) &&
+                       isValidAttendanceLog(incoming()) &&
+                       incoming().actorUid == request.auth.uid &&
+                       incoming().keys().hasAll(['studentId', 'studentCode', 'studentName', 'grade', 'parentUid', 'authorizedStaffUids', 'eventType', 'title', 'message', 'actorUid', 'actorName', 'actorRole', 'collectorName', 'timeLabel', 'dateKey', 'createdAt']) &&
+                       incoming().keys().hasOnly(['studentId', 'studentCode', 'studentName', 'grade', 'parentUid', 'authorizedStaffUids', 'eventType', 'title', 'message', 'actorUid', 'actorName', 'actorRole', 'collectorName', 'timeLabel', 'dateKey', 'createdAt']) &&
+                       exists(/databases/$(database)/documents/students/$(incoming().studentId)) &&
+                       (
+                         isStaff() ||
+                         (incoming().parentUid == request.auth.uid &&
+                          get(/databases/$(database)/documents/students/$(incoming().studentId)).data.parentUid == request.auth.uid &&
+                          incoming().eventType == 'PICKUP_REQUESTED' &&
+                          incoming().actorRole == 'PARENT' &&
+                          isCampusDispersalOpen())
+                       );
+
+      allow update, delete: if false;
+    }
+
+    match /bus_routes/{routeId} {
+      allow get: if isSignedIn() &&
+                    isValidId(routeId) &&
+                    (request.auth.uid in resource.data.assignedParentUids ||
+                     request.auth.uid in resource.data.authorizedStaffUids ||
+                     isAdmin());
+
+      allow list: if isSignedIn() &&
+                     (request.auth.uid in resource.data.assignedParentUids ||
+                      request.auth.uid in resource.data.authorizedStaffUids ||
+                      isBootstrappedAdmin());
+
+      allow create: if isAdmin() &&
+                       isValidId(routeId) &&
+                       isValidBusRoute(incoming()) &&
+                       incoming().keys().hasAll(['routeNumber', 'routeName', 'driverName', 'attendantName', 'status', 'boardedCount', 'capacity', 'lastCheckpoint', 'assignedParentUids', 'authorizedStaffUids', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['routeNumber', 'routeName', 'driverName', 'attendantName', 'status', 'boardedCount', 'capacity', 'lastCheckpoint', 'assignedParentUids', 'authorizedStaffUids', 'createdAt', 'updatedAt']);
+
+      allow update: if isSignedIn() &&
+                       isValidId(routeId) &&
+                       isValidBusRoute(incoming()) &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (isAdmin() &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['routeNumber', 'routeName', 'driverName', 'attendantName', 'status', 'boardedCount', 'capacity', 'lastCheckpoint', 'assignedParentUids', 'authorizedStaffUids', 'updatedAt'])) ||
+                         ((isSecurity() || isTeacher()) &&
+                          request.auth.uid in existing().authorizedStaffUids &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'boardedCount', 'lastCheckpoint', 'updatedAt']))
+                       );
+
+      allow delete: if isAdmin() && isValidId(routeId);
+    }
+
+    match /management_alerts/{alertId} {
+      allow get: if isSignedIn() &&
+                    isValidId(alertId) &&
+                    (resource.data.reportedByUid == request.auth.uid ||
+                     request.auth.uid in resource.data.authorizedStaffUids ||
+                     isAdmin());
+
+      allow list: if isSignedIn() &&
+                     (resource.data.reportedByUid == request.auth.uid ||
+                      request.auth.uid in resource.data.authorizedStaffUids ||
+                      isBootstrappedAdmin());
+
+      allow create: if isStaff() &&
+                       isValidId(alertId) &&
+                       isValidManagementAlert(incoming()) &&
+                       incoming().reportedByUid == request.auth.uid &&
+                       incoming().status == 'OPEN' &&
+                       incoming().keys().hasAll(['studentId', 'studentName', 'alertType', 'severity', 'title', 'description', 'reportedByUid', 'reportedByName', 'reportedByRole', 'status', 'authorizedStaffUids', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['studentId', 'studentName', 'alertType', 'severity', 'title', 'description', 'reportedByUid', 'reportedByName', 'reportedByRole', 'status', 'authorizedStaffUids', 'createdAt', 'updatedAt']);
+
+      allow update: if isAdmin() &&
+                       isValidId(alertId) &&
+                       isValidManagementAlert(incoming()) &&
+                       existing().status != 'RESOLVED' &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().reportedByUid == existing().reportedByUid &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(alertId);
+    }
+
+    match /role_requests/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isOwner(userId) &&
+                       isValidRoleRequest(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'PENDING' &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'email', 'requestedRole', 'note', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'requestedRole', 'note', 'status', 'createdAt', 'updatedAt']);
+
+      allow update: if isAdmin() &&
+                       isValidId(userId) &&
+                       isValidRoleRequest(incoming()) &&
+                       existing().status == 'PENDING' &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+  }
+}
